@@ -1,3 +1,3 @@
 # TODO
 
-- [ ] add point drawing funciton
+- [X] add point drawing function
