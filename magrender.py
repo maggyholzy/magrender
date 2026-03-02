@@ -1,10 +1,9 @@
-
-
 import time
 import numpy as np
 import base64
 import argparse
 import cv2
+
 
 background_value = 123
 
@@ -28,6 +27,9 @@ t = 0.0
 
 #points are (3,) shaped vectors
 
+cams = []
+drawables = []
+
 
 class Drawable:
 
@@ -37,6 +39,7 @@ class Drawable:
         self.visible = visible
         self.color = color_
         self.function = function
+        self.tags = []
         pass
 
     def on_draw(self, cam_):
@@ -47,6 +50,25 @@ class Drawable:
     def frame(self,t):
         if self.function is not None:
             self.function(t, self)
+
+    def set_tag(self, tag_ : str):
+        self.tags.append(tag_)
+
+    def remove_tag(self, tag_: str):
+        try:
+            self.tags.remove(tag_)
+        except Exception as e:
+            print(f"error: {e}")
+            print(f"{self.function}")
+
+            
+    def frame(self,t):
+        if(self.function is not None):
+            try:
+                self.function(t, self)
+            except Exception as e:
+                print(f"error: {e}")
+                print(f"{self.function}")
 
 class Cam:
     image = None
@@ -150,12 +172,55 @@ class Point (Drawable):
     def set_color(self,color_):
         self.color = color_
     
-    def frame(self,t):
-        try:
-            self.function(t, self)
-        except Exception as e:
-            print(f"error: {e}")
-            print(f"{self.function}")
+
+class Line (Drawable):
+    def __init__(self, origin_, points_,d_ = 0.50, function = None, visible=True, size=11):
+        self.points = points_ #(2,3) row x col
+        self.function = function
+        self.size = size
+        self.sprite()
+        self.color = [1,1,1]*255
+        self.d = d_ #draw interval, float32
+        super().__init__(origin_, visible, function = function)
+
+    def on_draw(self, cam_:Cam):
+        
+        #interpolate 
+        vec = self.points[1,:] - self.points[0,:]
+        vec_len = np.linalg.norm(vec)
+        vec = vec / vec_len #normalize
+        point = np.copy(self.points[0,:])
+
+        while (np.linalg.norm(point - self.points[0,:]) < vec_len):
+
+            try:
+                a = cam_.get_plane_coords(point)
+                # print(a)
+                cam_.draw_sprite(self.sprite,a)
+                
+
+            except Exception as e:
+                print(f"exception:{e}")
+            point += vec * self.d
+
+        a = cam_.get_plane_coords(self.points[1,:])
+        # print(a)
+        cam_.draw_sprite(self.sprite,a)
+
+        pass
+
+    def set_points(self,points_):
+        self.points = points_ #2,3 float32
+
+    def set_color(self,color_):
+        self.color = color_
+
+
+            
+    def sprite(self): #size should be an odd number so image has center
+        self.sprite = np.ones((self.size,self.size,4), dtype = np.uint8)*255 #size x size white square, can make dot laterv
+
+
         
 def helix(t, p:Point):
     point = np.asarray([0,0,0],dtype=np.float32)
@@ -197,31 +262,15 @@ def frame():
     cv2.imshow(title,window_image[:,:,0:3])
 
     t += timestep
+    cv2.waitKey((int)(timestep*1000 / 20))
 
     return
 
-
-
-#initiate cam
-length1 = 5
-cam1 = Cam(cnl=np.reshape([0,0,0,1,1,1],(2,3))*length1, 
-            params_=np.array([length1,length1,0,0]), #(4,) w,h,cx,cy, center is at origin of N2
-            window_params_=np.array([(window[0]-100//2),(window[1]-100//2),(window[0]-100//2)/2,(window[1]-100//2)/2], dtype=np.uint16)) #(4,) w,h,cx,cy
-
-cams = []
-cams.append(cam1)
 for cam in cams:
     print(cam)
 
-#initiate drawables
 
-drawables = []
 
-helix_t = Point(np.reshape([0,0,0],shape=(1,3)),np.reshape([0,0,0],shape=(1,3)), function=helix, size=1)
-drawables.append(helix_t)
 
-while True:
-    frame()
-    cv2.waitKey((int)(timestep*1000 / 20))
 
 cv2.destroyAllWindows()
