@@ -7,7 +7,7 @@ import cv2
 
 background_value = 123
 
-window = [500,500] #rows, columns
+window = [800,800] #rows, columns
 window_image = np.full([window[0],window[1],4], 255, dtype=np.uint8) #rgb + alpha, max = 255
 window_image[:,:,0:3] = np.full([window[0],window[1],3], background_value, dtype=np.uint8)
 
@@ -16,7 +16,7 @@ title = "MagRender"
 cv2.namedWindow(title,cv2.WINDOW_GUI_NORMAL)
 cv2.resizeWindow(title,window[0],window[1])
 print(cv2.getWindowImageRect(title))
-cv2.moveWindow(title,200,200)
+cv2.moveWindow(title,200,1800)
 
 
 
@@ -34,10 +34,9 @@ drawables = []
 class Drawable:
 
 
-    def __init__(self, origin_, visible = True, color_ = [1,1,1,1], function = None):
+    def __init__(self, origin_, visible = True, function = None):
         self.origin = origin_
         self.visible = visible
-        self.color = color_
         self.function = function
         self.tags = []
         pass
@@ -59,7 +58,7 @@ class Drawable:
             self.tags.remove(tag_)
         except Exception as e:
             print(f"error: {e}")
-            print(f"{self.function}")
+            print(f"{self.tags}")
 
             
     def frame(self,t):
@@ -68,6 +67,7 @@ class Drawable:
                 self.function(t, self)
             except Exception as e:
                 print(f"error: {e}")
+                print(f"line:{e.with_traceback}")
                 print(f"{self.function}")
 
 class Cam:
@@ -82,6 +82,7 @@ class Cam:
         self.n = self.n / np.linalg.norm(self.n) #normalized normal vector
         self.params = params_ #(4,) w,h,cx,cy
         self.window_params = window_params_ #(4,) w,h,cx,cy
+        self.ratios = self.window_params[0:2] / self.params[0:2] #ratio of widths and heights
         self.x1 = np.cross(np.asarray([0,0,1]), self.n) #global vector for x of plane-coordinates (2d)
         self.x1 = self.x1 / np.linalg.norm(self.x1) #normalize
         self.y1 = np.linalg.cross(self.n,self.x1)
@@ -111,24 +112,17 @@ class Cam:
 
     def draw_sprite(self,sprite:np.ndarray,coordinate):
         sh = sprite.shape
-        # print(f"sprite.shape:{sprite.shape}, self.image.shape:{self.image.shape}")
-        # print(f"coordinate:{coordinate}")
-        ratios = self.window_params[0:2] / self.params[0:2] #ratio of widths and heights
-        # print(f"ratios:{ratios}, self.window_params[2:]:{self.window_params[2:]}")
-        img_coord = np.add(coordinate - self.params[2:]*ratios, self.window_params[2:]) #coordinate of center of sprite in pixel coordinates
-        # print(f"img_coord:{img_coord}")
+        
+        img_coord = np.add(coordinate - self.params[2:]*self.ratios, self.window_params[2:]) #coordinate of center of sprite in pixel coordinates
+        
         img_coord_int = np.array([int(i) for i in img_coord])
-        # print(f"img_coord_int:{img_coord_int}")
-        # print(f"{img_coord_int[0]-sh[0]//2},{img_coord_int[0]+sh[0]//2+1}")
-        # print(f"{img_coord_int[1]-sh[1]//2},{img_coord_int[1]+sh[1]//2+1}")
-        # print(sprite)
         self.image[img_coord_int[0]-sh[0]//2:img_coord_int[0]+sh[0]//2+1:, 
                    img_coord_int[1]-sh[1]//2:img_coord_int[1]+sh[1]//2+1:,
                    :] = sprite
         pass
 
     def get_image(self):
-        return self.image
+        return self.image[::-1,:,:].copy()
     
     def set_burnin(self, burn_in_):
         self.burn_in = burn_in_
@@ -143,12 +137,12 @@ class Cam:
 class Point (Drawable):
 
 
-    def __init__(self, origin_, point_, function = None, visible=True, size=11):
+    def __init__(self, origin_, point_, function = None, visible=True, size=11,color_ = [255,255,255]):
         self.point = point_ #(3,)
         self.function = function
         self.size = size
-        self.sprite()
-        self.color = [1,1,1]*255
+        self.color = color_
+        self.set_sprite()
         super().__init__(origin_, visible, function = function)
 
     def on_draw(self, cam_:Cam):
@@ -156,30 +150,38 @@ class Point (Drawable):
             a = cam_.get_plane_coords(self.point)
             # print(a)
             cam_.draw_sprite(self.sprite,a)
-
-
         except Exception as e:
             print(f"exception:{e}")
-
         pass
 
-    def sprite(self): #size should be an odd number so image has center
+    def set_sprite(self): #size should be an odd number so image has center
+        self.sprite : np.ndarray
         self.sprite = np.ones((self.size,self.size,4), dtype = np.uint8)*255 #size x size white square, can make dot later
+        for i in range(3):
+            self.sprite[:,:,i].fill(self.color[i])
+        
+    def set_color(self, color_ : np.ndarray):
+        #color is an ndarray, (3,), int32 between 0 and 255
+        color_ = np.array([int(i) for i in color_])
+        color_.clip(0,255)
+        self.color = color_
+        self.set_sprite()
+        # self.sprite(self) #rebuild sprite, not done every frame
+
+    def get_color(self):
+        return self.color
 
     def set_point(self,point_):
         self.point = point_
 
-    def set_color(self,color_):
-        self.color = color_
     
 
 class Line (Drawable):
-    def __init__(self, origin_, points_,d_ = 0.50, function = None, visible=True, size=11):
+    def __init__(self, origin_, points_,d_ = 1.0, function = None, visible=True, size=11):
         self.points = points_ #(2,3) row x col
         self.function = function
         self.size = size
         self.sprite()
-        self.color = [1,1,1]*255
         self.d = d_ #draw interval, float32
         super().__init__(origin_, visible, function = function)
 
@@ -190,51 +192,48 @@ class Line (Drawable):
         vec_len = np.linalg.norm(vec)
         vec = vec / vec_len #normalize
         point = np.copy(self.points[0,:])
+        a1 = cam_.get_plane_coords(self.points[0,:])
+        a2 = cam_.get_plane_coords(self.points[1,:])
+        vec2 = (a2-a1)
+        a_len = np.linalg.norm(vec2)
+        vec2 = vec2 / a_len #normalize
 
-        while (np.linalg.norm(point - self.points[0,:]) < vec_len):
+        a = a1.copy()
 
-            try:
-                a = cam_.get_plane_coords(point)
-                # print(a)
-                cam_.draw_sprite(self.sprite,a)
+        # while (np.linalg.norm(point - self.points[0,:]) < vec_len):
+
+        #     try:
+        #         a = cam_.get_plane_coords(point)
+        #         # print(a)
+        #         cam_.draw_sprite(self.sprite,a)
                 
 
-            except Exception as e:
-                print(f"exception:{e}")
-            point += vec * self.d
+        #     except Exception as e:
+        #         print(f"exception:{e}")
+        #     point += vec * self.d
 
-        a = cam_.get_plane_coords(self.points[1,:])
-        # print(a)
-        cam_.draw_sprite(self.sprite,a)
+        # a = cam_.get_plane_coords(self.points[1,:])
+        # # print(a)
+        # cam_.draw_sprite(self.sprite,a)
+
+        # pass
+        while (np.linalg.norm(a - a1) < a_len):
+            try:
+                cam_.draw_sprite(self.sprite,a)
+                a += vec2 * self.d
+            except Exception as e:print(f"exception:{e}")
 
         pass
 
     def set_points(self,points_):
         self.points = points_ #2,3 float32
 
-    def set_color(self,color_):
-        self.color = color_
-
-
-            
     def sprite(self): #size should be an odd number so image has center
         self.sprite = np.ones((self.size,self.size,4), dtype = np.uint8)*255 #size x size white square, can make dot laterv
 
 
         
-def helix(t, p:Point):
-    point = np.asarray([0,0,0],dtype=np.float32)
-    r = np.abs(4 + 4 * (np.sin( t * 0.24))/(np.cos( t * 0.24)+0.20))
-    point[0] = np.cos(t*15) * r
-    point[1] = np.sin(t*15) * r
-    point[2] = -290 + 12 * t
 
-    point.resize((1,3))
-
-    print(point)
-
-    p.set_point(point)
-    return point
 
     
 def frame():
@@ -250,9 +249,18 @@ def frame():
         if(not cam.get_burnin()): cam.reset_image()
         obj: Drawable
         for obj in drawables:
-            obj.frame(t)
-            obj.on_draw(cam_=cam)
-            pass
+            if(obj.tags.__contains__("oneshot") and not obj.tags.__contains__("drawn")):
+                obj.frame(t)
+                obj.on_draw(cam_=cam)
+                obj.set_tag("drawn")
+            elif(obj.tags.__contains__("oneshot") and obj.tags.__contains__("drawn")):
+                obj.frame(t)
+                pass
+            else:
+                obj.frame(t)
+                obj.on_draw(cam_=cam)
+                pass
+            
         #generate image for each cam
         cam_image = cam.get_image().copy()
         window_image[window[0]//2 - cam_image.shape[0]//2:window[0]//2 + cam_image.shape[0]//2,
@@ -262,7 +270,7 @@ def frame():
     cv2.imshow(title,window_image[:,:,0:3])
 
     t += timestep
-    cv2.waitKey((int)(timestep*1000 / 20))
+    cv2.waitKey((int)(1))
 
     return
 
@@ -270,7 +278,7 @@ for cam in cams:
     print(cam)
 
 
-
+cv2.moveWindow(title,200,1800)
 
 
 cv2.destroyAllWindows()

@@ -19,15 +19,19 @@ mg.cams.append(cam1)
 
 #initiate drawables
 
-helix_t = mg.Point(np.reshape([0,0,0],shape=(1,3)),np.reshape([0,0,0],shape=(1,3)), function=mg.helix, size=1)
-mg.drawables.append(helix_t)
+vartab = {}
+vartab["ind"] = []
+vartab["t"] = []
+vartab["r1"] = []
+vartab["r0"] = []
+vartab["images"] = []
 
 
-x_axis = mg.Line(np.array([0,0,0],dtype=np.float32),np.array([[0,0,0],[200,0,0]],dtype=np.float32),size = 1,d_ = 4)
+x_axis = mg.Line(np.array([0,0,0],dtype=np.float32),np.array([[0,0,0],[200,0,0]],dtype=np.float32),size = 1,d_ = 0.50)
 mg.drawables.append(x_axis)
-y_axis = mg.Line(np.array([0,0,0],dtype=np.float32),np.array([[0,0,0],[0,200,0]],dtype=np.float32),size = 1,d_ = 4)
+y_axis = mg.Line(np.array([0,0,0],dtype=np.float32),np.array([[0,0,0],[0,200,0]],dtype=np.float32),size = 1,d_ = 2)
 mg.drawables.append(y_axis)
-z_axis = mg.Line(np.array([0,0,0],dtype=np.float32),np.array([[0,0,0],[0,0,200]],dtype=np.float32),size = 1,d_ = 4)
+z_axis = mg.Line(np.array([0,0,0],dtype=np.float32),np.array([[0,0,0],[0,0,200]],dtype=np.float32),size = 1,d_ = 5)
 mg.drawables.append(z_axis)
 
 
