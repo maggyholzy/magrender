@@ -5,7 +5,7 @@ import argparse
 import cv2
 
 
-background_value = 123
+background_value = 126
 
 window = [800,800] #rows, columns
 window_image = np.full([window[0],window[1],4], 255, dtype=np.uint8) #rgb + alpha, max = 255
